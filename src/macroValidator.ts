@@ -209,6 +209,39 @@ export function checkGescal12Duplicates(rows: CensusRecord[]): ValidationResult[
     return extraErrors;
 }
 
+export function checkGescal26Duplicates(rows: CensusRecord[]): ValidationResult[] {
+    const extraErrors: ValidationResult[] = [];
+    const groups = new Map<string, number[]>();
+
+    for (let i = 0; i < rows.length; i++) {
+        const gescal26 = rows[i].GESCAL26;
+        if (!gescal26 || gescal26.length !== 26) continue;
+
+        let indices = groups.get(gescal26);
+        if (!indices) {
+            indices = [];
+            groups.set(gescal26, indices);
+        }
+        indices.push(i);
+    }
+
+    for (const [gescal26, indices] of groups) {
+        if (indices.length >= 2) {
+            const msg = `GESCAL26 duplicado: "${gescal26}" aparece ${indices.length} veces`;
+            for (const i of indices) {
+                extraErrors.push({
+                    rowIndex: i,
+                    row: rows[i],
+                    errors: [{ rule: 'GESCAL26-DUPLICATE', message: msg }],
+                    hasError: true,
+                });
+            }
+        }
+    }
+
+    return extraErrors;
+}
+
 export function checkSumHogares(row: CensusRecord): ValidationError | null {
     const totales = Number(row.TOTALES) || 0;
     const hogares = Number(row['NUM-DE-HOGARES']) || 0;
@@ -235,6 +268,15 @@ export function mergeAllValidationResults(rows: CensusRecord[]): ValidationResul
 
     const dupResults = checkGescal12Duplicates(rows);
     for (const dup of dupResults) {
+        const existing = baseResults[dup.rowIndex];
+        for (const err of dup.errors) {
+            existing.errors.push(err);
+            existing.hasError = true;
+        }
+    }
+
+    const dup26Results = checkGescal26Duplicates(rows);
+    for (const dup of dup26Results) {
         const existing = baseResults[dup.rowIndex];
         for (const err of dup.errors) {
             existing.errors.push(err);
